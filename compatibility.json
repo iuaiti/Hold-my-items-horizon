@@ -8,7 +8,8 @@
   "horizon": {
     "repository": "https://github.com/horizon-rust/horizon",
     "revision": "c9d474dd9116e84c243f8992d75c11314df56f06",
-    "minecraft_version": "26.3"
+    "minecraft_version": "26.3",
+    "hooks": 46
   },
   "horizon_mixins": {
     "repository": "https://github.com/horizon-rust/horizon-mixins",
