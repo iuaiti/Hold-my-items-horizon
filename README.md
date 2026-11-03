@@ -11,7 +11,7 @@ Native Horizon mod (`.hnmod`) port of **Hold My Items (HMI) 5.1.1**
 - **First-Person Particles & Dynamic Hand Lighting**: Soft additive glow on held torches, soul torches, redstone torches, lanterns, lava buckets, and brewing stands, petal/firefly bursts when swinging pink petals, wildflowers, or leaf litter, plus camera-local colored dynamic lights via `native_visuals`.
 - **In-Game Settings & `/hmi` Command**: Configure in `Options > Mods > Hold My Items` or via `/hmi` (`/hmi reload`, `/hmi inspect`, `/hmi speed <ticks>`, `/hmi offset <x> <y> <z>`, `/hmi reset`).
 
-## Installation (Horizon Nightly `c9d474d`)
+## Installation
 1. Copy `holdmyitems-5.1.1.hnmod` into your Horizon instance's `horizon-native-mods/` folder (or run `horizon-launcher native-build holdmyitems-5.1.1.hnmod --trust-native-code`).
 2. (Optional) Copy `holdmyitems-pack.zip` into your Horizon instance's `resourcepacks/` folder and enable it in `Options > Resource Packs` for the 3D fish bucket, chest boat, and flower models.
 3. Click **Build** in the Horizon Launcher's Mods tab (`Native build`).
