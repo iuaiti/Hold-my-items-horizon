@@ -1,6 +1,6 @@
-# Hold My Items 5.1.1 for Horizon (Rust Minecraft 26.3 — Nightly `c9d474d`)
+# Hold My Items 5.1.1 for Horizon (Rust Minecraft 26.3)
 
-Native Horizon mod (`.hnmod`) port of **Hold My Items (HMI) 5.1.1** pinned to Horizon Nightly `c9d474dd9116e84c243f8992d75c11314df56f06` (`nightly-source/2026-11-01-c9d474d`, Minecraft Java Edition 26.3).
+Native Horizon mod (`.hnmod`) port of **Hold My Items (HMI) 5.1.1** 
 
 ## Features Ported
 - **First-Person Hand & Item Overhaul (`HeldItemRendererMixin`)**: Renders the player's arm gripping held weapons, tools, 3D blocks, lanterns, torches, buckets, food, potions, bows, crossbows, tridents, spears, shields, and filled maps.
