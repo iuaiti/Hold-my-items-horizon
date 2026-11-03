@@ -1371,6 +1371,11 @@ pub struct HmiState {
     pub swing_m_hand: bool,
     pub swing_o_hand: bool,
     pub main_swing_count: u32,
+    pub main_swing_ticked_20tps: bool,
+    pub off_swing_ticked_20tps: bool,
+    pub last_haste: Option<i32>,
+    pub last_fatigue: Option<i32>,
+    pub angles_initialized: bool,
 
     pub particles: Vec<HmiParticle>,
     pub rng_state: u64,
@@ -1479,6 +1484,11 @@ impl Default for HmiState {
             swing_m_hand: false,
             swing_o_hand: false,
             main_swing_count: 0,
+            main_swing_ticked_20tps: false,
+            off_swing_ticked_20tps: false,
+            last_haste: None,
+            last_fatigue: None,
+            angles_initialized: false,
             particles: Vec::new(),
             rng_state: 0x9E37_79B9_7F4A_7C15,
             debug_lines: Vec::new(),
@@ -1497,47 +1507,121 @@ impl HmiState {
         ((x >> 40) as u32) as f32 / ((1u32 << 24) as f32)
     }
 
+    #[inline]
+    pub fn modify_swing_max(base: u32, dig_speed: Option<i32>, fatigue: Option<i32>) -> u32 {
+        let b = base as i32;
+        let modified = if let Some(amp) = dig_speed {
+            b - (1 + amp)
+        } else if let Some(amp) = fatigue {
+            b + (1 + amp) * 2
+        } else {
+            b
+        };
+        modified.max(2) as u32
+    }
+
+    pub fn clear_active_swings(&mut self) {
+        self.main_hand_swinging = false;
+        self.main_hand_swing_ticks = 0;
+        self.main_hand_swing_progress = 0.0;
+        self.last_main_hand_swing_progress = 0.0;
+        self.off_hand_swinging = false;
+        self.off_hand_swing_ticks = 0;
+        self.off_hand_swing_progress = 0.0;
+        self.last_off_hand_swing_progress = 0.0;
+        self.main_swing_ticked_20tps = false;
+        self.off_swing_ticked_20tps = false;
+    }
+
     pub fn main_swing(&self, partial: f32) -> f32 {
-        let mut d = self.main_hand_swing_progress - self.last_main_hand_swing_progress;
-        if d < 0.0 {
-            d += 1.0;
+        if !self.main_hand_swinging {
+            return 0.0;
         }
-        (self.last_main_hand_swing_progress + d * partial).clamp(0.0, 1.0)
+        let d = (self.main_hand_swing_progress - self.last_main_hand_swing_progress).max(0.0);
+        (self.last_main_hand_swing_progress + d * partial.clamp(0.0, 1.0)).clamp(0.0, 1.0)
     }
 
     pub fn off_swing(&self, partial: f32) -> f32 {
-        let mut d = self.off_hand_swing_progress - self.last_off_hand_swing_progress;
-        if d < 0.0 {
-            d += 1.0;
+        if !self.off_hand_swinging {
+            return 0.0;
         }
-        (self.last_off_hand_swing_progress + d * partial).clamp(0.0, 1.0)
+        let d = (self.off_hand_swing_progress - self.last_off_hand_swing_progress).max(0.0);
+        (self.last_off_hand_swing_progress + d * partial.clamp(0.0, 1.0)).clamp(0.0, 1.0)
     }
 
-    /// Replicates `LivingEntityMixin.swingHand(Hand)`
+    /// Replicates `LivingEntityMixin.swingHand(Hand)` for discrete swings.
     pub fn on_swing(&mut self, main_hand: bool, item: &ItemFlags, config: &Config) {
-        let max_ticks = item.swing_duration(config.swing_speed, &self.overrides);
-        let half = max_ticks / 2;
+        self.on_swing_ex(main_hand, item, config, false);
+    }
+
+    /// Swing start handler that distinguishes a held button / continuous block-mining repeat
+    /// (`continuous_hold = true`, where `swing_hand` is invoked every tick while the button stays
+    /// down) from a discrete mouse click (`continuous_hold = false`).
+    pub fn on_swing_ex(
+        &mut self,
+        main_hand: bool,
+        item: &ItemFlags,
+        config: &Config,
+        continuous_hold: bool,
+    ) {
+        let max_ticks = Self::modify_swing_max(
+            item.swing_duration(config.swing_speed, &self.overrides),
+            self.last_haste,
+            self.last_fatigue,
+        );
+        // When holding the mouse button down continuously (`continuous_hold`), let the current
+        // swing complete all the way to 1.0 (`!self.main_hand_swinging`) before starting the next
+        // cycle so mining animations never cut off mid-swing or jitter.
+        // For discrete mouse clicks (`!continuous_hold`), allow immediate re-swing after a brief
+        // debounce (`progress >= 0.08`) so fast clicks are always registered without double-firing
+        // within the same frame.
+        let min_reclick_progress = (1.0 / (max_ticks as f32)).min(0.08);
         if main_hand {
-            if !self.main_hand_swinging
-                || self.main_hand_swing_ticks >= half
-                || self.main_hand_swing_ticks == 0
-            {
+            let can_start = if continuous_hold {
+                !self.main_hand_swinging
+            } else {
+                !self.main_hand_swinging
+                    || self.main_hand_swing_progress >= min_reclick_progress
+                    || self.main_hand_swing_progress == 0.0
+            };
+            if can_start {
+                let already_just_started =
+                    self.main_hand_swinging && self.main_hand_swing_progress == 0.0;
                 self.main_hand_swing_ticks = 0;
+                self.main_hand_swing_progress = 0.0;
+                self.last_main_hand_swing_progress = 0.0;
                 self.main_hand_swinging = true;
-                self.swing_m_hand = !self.swing_m_hand;
-                self.main_swing_count = self.main_swing_count.wrapping_add(1);
+                self.main_swing_ticked_20tps = false;
+                if !already_just_started {
+                    self.swing_m_hand = !self.swing_m_hand;
+                    self.main_swing_count = self.main_swing_count.wrapping_add(1);
+                }
             }
-        } else if !self.off_hand_swinging
-            || self.off_hand_swing_ticks >= half
-            || self.off_hand_swing_ticks == 0
-        {
-            self.off_hand_swing_ticks = 0;
-            self.off_hand_swinging = true;
-            self.swing_o_hand = !self.swing_o_hand;
+        } else {
+            let can_start = if continuous_hold {
+                !self.off_hand_swinging
+            } else {
+                !self.off_hand_swinging
+                    || self.off_hand_swing_progress >= min_reclick_progress
+                    || self.off_hand_swing_progress == 0.0
+            };
+            if can_start {
+                let already_just_started =
+                    self.off_hand_swinging && self.off_hand_swing_progress == 0.0;
+                self.off_hand_swing_ticks = 0;
+                self.off_hand_swing_progress = 0.0;
+                self.last_off_hand_swing_progress = 0.0;
+                self.off_hand_swinging = true;
+                self.off_swing_ticked_20tps = false;
+                if !already_just_started {
+                    self.swing_o_hand = !self.swing_o_hand;
+                }
+            }
         }
     }
 
-    /// Replicates `LivingEntityMixin.tick` (20 TPS per-hand swing progress update).
+    /// Replicates `LivingEntityMixin.tick` (20 TPS per-hand swing progress update for tests/callers
+    /// that step swings by integer ticks).
     pub fn tick_swings(
         &mut self,
         main_item: &ItemFlags,
@@ -1546,44 +1630,58 @@ impl HmiState {
         fatigue: Option<i32>,
         config: &Config,
     ) {
+        self.last_haste = dig_speed;
+        self.last_fatigue = fatigue;
+
+        let max_main = Self::modify_swing_max(
+            main_item.swing_duration(config.swing_speed, &self.overrides),
+            dig_speed,
+            fatigue,
+        );
         self.last_main_hand_swing_progress = self.main_hand_swing_progress;
-        self.last_off_hand_swing_progress = self.off_hand_swing_progress;
-
-        let modify_max = |base: u32| -> u32 {
-            let b = base as i32;
-            let modified = if let Some(amp) = dig_speed {
-                b - (1 + amp)
-            } else if let Some(amp) = fatigue {
-                b + (1 + amp) * 2
-            } else {
-                b
-            };
-            modified.max(2) as u32
-        };
-
-        let max_main = modify_max(main_item.swing_duration(config.swing_speed, &self.overrides));
         if self.main_hand_swinging {
             self.main_hand_swing_ticks += 1;
             if self.main_hand_swing_ticks >= max_main {
                 self.main_hand_swing_ticks = 0;
                 self.main_hand_swinging = false;
+                self.main_hand_swing_progress = 0.0;
+                self.last_main_hand_swing_progress = 0.0;
+            } else {
+                self.main_hand_swing_progress =
+                    self.main_hand_swing_ticks as f32 / max_main as f32;
             }
+            self.main_swing_ticked_20tps = true;
         } else {
             self.main_hand_swing_ticks = 0;
+            self.main_hand_swing_progress = 0.0;
+            self.last_main_hand_swing_progress = 0.0;
+            self.main_swing_ticked_20tps = false;
         }
-        self.main_hand_swing_progress = self.main_hand_swing_ticks as f32 / max_main as f32;
 
-        let max_off = modify_max(off_item.swing_duration(config.swing_speed, &self.overrides));
+        let max_off = Self::modify_swing_max(
+            off_item.swing_duration(config.swing_speed, &self.overrides),
+            dig_speed,
+            fatigue,
+        );
+        self.last_off_hand_swing_progress = self.off_hand_swing_progress;
         if self.off_hand_swinging {
             self.off_hand_swing_ticks += 1;
             if self.off_hand_swing_ticks >= max_off {
                 self.off_hand_swing_ticks = 0;
                 self.off_hand_swinging = false;
+                self.off_hand_swing_progress = 0.0;
+                self.last_off_hand_swing_progress = 0.0;
+            } else {
+                self.off_hand_swing_progress =
+                    self.off_hand_swing_ticks as f32 / max_off as f32;
             }
+            self.off_swing_ticked_20tps = true;
         } else {
             self.off_hand_swing_ticks = 0;
+            self.off_hand_swing_progress = 0.0;
+            self.last_off_hand_swing_progress = 0.0;
+            self.off_swing_ticked_20tps = false;
         }
-        self.off_hand_swing_progress = self.off_hand_swing_ticks as f32 / max_off as f32;
     }
 
     /// Steps frame-rate independent physics and counters once per rendered frame.
@@ -1597,8 +1695,65 @@ impl HmiState {
         config: &Config,
     ) -> Vec<QueuedSound> {
         let mut sounds = Vec::new();
-        let dt = dt.clamp(0.0, 0.05);
+        let dt = if dt.is_finite() { dt.clamp(0.0, 0.05) } else { 0.0 };
         let dt30 = dt * 30.0;
+        let dt20 = dt * 20.0;
+
+        // Advance per-hand swing progress directly with frame delta-time (`dt * 20.0` ticks/sec)
+        // unless `tick_swings` already stepped this frame explicitly.
+        if self.main_swing_ticked_20tps {
+            self.main_swing_ticked_20tps = false;
+        } else if dt > 0.0 {
+            let max_main = Self::modify_swing_max(
+                main_item.swing_duration(config.swing_speed, &self.overrides),
+                self.last_haste,
+                self.last_fatigue,
+            ) as f32;
+            if self.main_hand_swinging {
+                self.main_hand_swing_progress += dt20 / max_main;
+                if self.main_hand_swing_progress >= 1.0 {
+                    self.main_hand_swinging = false;
+                    self.main_hand_swing_ticks = 0;
+                    self.main_hand_swing_progress = 0.0;
+                    self.last_main_hand_swing_progress = 0.0;
+                } else {
+                    self.main_hand_swing_ticks =
+                        (self.main_hand_swing_progress * max_main).floor() as u32;
+                    self.last_main_hand_swing_progress = self.main_hand_swing_progress;
+                }
+            } else {
+                self.main_hand_swing_ticks = 0;
+                self.main_hand_swing_progress = 0.0;
+                self.last_main_hand_swing_progress = 0.0;
+            }
+        }
+
+        if self.off_swing_ticked_20tps {
+            self.off_swing_ticked_20tps = false;
+        } else if dt > 0.0 {
+            let max_off = Self::modify_swing_max(
+                off_item.swing_duration(config.swing_speed, &self.overrides),
+                self.last_haste,
+                self.last_fatigue,
+            ) as f32;
+            if self.off_hand_swinging {
+                self.off_hand_swing_progress += dt20 / max_off;
+                if self.off_hand_swing_progress >= 1.0 {
+                    self.off_hand_swinging = false;
+                    self.off_hand_swing_ticks = 0;
+                    self.off_hand_swing_progress = 0.0;
+                    self.last_off_hand_swing_progress = 0.0;
+                } else {
+                    self.off_hand_swing_ticks =
+                        (self.off_hand_swing_progress * max_off).floor() as u32;
+                    self.last_off_hand_swing_progress = self.off_hand_swing_progress;
+                }
+            } else {
+                self.off_hand_swing_ticks = 0;
+                self.off_hand_swing_progress = 0.0;
+                self.last_off_hand_swing_progress = 0.0;
+            }
+        }
 
         let main_swing_prog = self.main_swing(partial);
         let off_swing_prog = self.off_swing(partial);
@@ -2106,24 +2261,46 @@ impl HmiState {
             self.inspection_spin = 0.0;
         }
 
-        self.tilting += main_swing_prog * dt * 3.0;
+        self.tilting = (self.tilting + main_swing_prog * dt * 3.0).rem_euclid(628.31853);
+        self.a = self.a.rem_euclid(628.31853);
+        self.walk = self.walk.rem_euclid(628.31853);
+        self.water_walk = self.water_walk.rem_euclid(628.31853);
+        self.swim_counter = self.swim_counter.rem_euclid(628.31853);
+        self.crawler = self.crawler.rem_euclid(628.31853);
+        self.crwl = self.crwl.rem_euclid(628.31853);
+        self.bow_wiggle = self.bow_wiggle.rem_euclid(628.31853);
+        self.bow_wiggle_o = self.bow_wiggle_o.rem_euclid(628.31853);
+        self.food_count_sec = self.food_count_sec.rem_euclid(628.31853);
+        self.food_count_sec_o = self.food_count_sec_o.rem_euclid(628.31853);
+        self.jiggle_i = self.jiggle_i.rem_euclid(628.31853);
 
-        // Food speed camera feedback
-        let sinal_food_speed = (self.food_count.clamp(0.80041, 1.0) * 3.14 * 5.0).sin() * 0.45;
+        // Food speed camera feedback (only active when food_count > 0.80041)
+        let sinal_food_speed = if self.food_count > 0.80041 {
+            (self.food_count.clamp(0.80041, 1.0) * 3.14 * 5.0).sin() * 0.45
+        } else {
+            0.0
+        };
         self.food_speed += sinal_food_speed * dt30;
         self.food_speed *= 0.8_f32.powf(dt30);
 
         // Pitch & Yaw spring-damper inertia (item_pose.lua lines 163-201)
         let sp = if main_item.is_spear() { 1.0 } else { 0.0 };
         let spo = if off_item.is_spear() { 1.0 } else { 0.0 };
-        let mut d_pitch = input.pitch - self.prev_pitch;
-        let mut d_yaw = input.yaw - self.prev_yaw;
-        while d_yaw > 180.0 {
-            d_yaw -= 360.0;
+        if !self.angles_initialized {
+            self.prev_pitch = input.pitch;
+            self.prev_yaw = input.yaw;
+            self.angles_initialized = true;
         }
-        while d_yaw < -180.0 {
-            d_yaw += 360.0;
-        }
+        let mut d_pitch = if input.pitch.is_finite() && self.prev_pitch.is_finite() {
+            input.pitch - self.prev_pitch
+        } else {
+            0.0
+        };
+        let mut d_yaw = if input.yaw.is_finite() && self.prev_yaw.is_finite() {
+            (input.yaw - self.prev_yaw + 180.0).rem_euclid(360.0) - 180.0
+        } else {
+            0.0
+        };
         d_pitch = d_pitch.clamp(-45.0, 45.0);
         d_yaw = d_yaw.clamp(-45.0, 45.0);
         self.prev_pitch = input.pitch;
@@ -2380,8 +2557,18 @@ impl HmiState {
         } else {
             input.off_equip_progress
         };
-        if item.is_spear() {
+        let hand_switch_val = if main_hand {
+            self.main_hand_switch
+        } else {
+            self.off_hand_switch
+        };
+        // Suppress vanilla's attack-strength / durability re-equip dip when a swing or mining is active,
+        // or once HMI's own hand-switch animation (`main_hand_switch`) has finished, preventing swords
+        // and held items from repeatedly chopping down after swings, durability updates, or slot syncs.
+        if item.is_spear() || input.block_breaking || raw_swing > 0.0 || hand_switch_val >= 1.0 {
             equip_progress = 0.0;
+        } else {
+            equip_progress *= (1.0 - hand_switch_val).clamp(0.0, 1.0);
         }
 
         // 1. `scenePoseMain`: runs `hand_pose.lua`, then translates (0, -0.35, 0.2) if `!item.is_empty`
@@ -4015,5 +4202,59 @@ mod tests {
         assert_ne!(eval.item_pose, Mat4f::IDENTITY);
         assert!(!eval.animator.is_empty());
         assert!(eval.animator.matrix_for_quad(0).is_some());
+    }
+
+    #[test]
+    fn swing_completes_cleanly_without_looping_and_accepts_fast_clicks() {
+        let mut state = HmiState::default();
+        let cfg = Config::default();
+        let sword = ItemFlags {
+            id: "minecraft:diamond_sword".to_owned(),
+            is_empty: false,
+            is_block: false,
+            use_kind: UseKind::None,
+            is_charged_crossbow: false,
+            is_cooling_down: false,
+            spear_can_damage: false,
+            spear_can_dismount: false,
+            spear_can_knockback: false,
+            spear_hit_impact: false,
+        };
+        let off = ItemFlags::empty();
+        let input = PlayerFrameInput {
+            on_ground: true,
+            ..Default::default()
+        };
+
+        // Start a sword swing and advance via step_frame alone.
+        state.on_swing_ex(true, &sword, &cfg, false);
+        assert!(state.main_hand_swinging);
+        for _ in 0..40 {
+            state.step_frame(0.016, 0.75, &sword, &off, &input, &cfg);
+        }
+        // Swing must finish and stay strictly at 0.0 regardless of partial tick.
+        assert!(!state.main_hand_swinging);
+        assert_eq!(state.main_swing(0.0), 0.0);
+        assert_eq!(state.main_swing(0.5), 0.0);
+        assert_eq!(state.main_swing(0.99), 0.0);
+
+        // Fast discrete re-click after 2 frames (~64ms) must register immediately without wrap-around jump.
+        state.on_swing_ex(true, &sword, &cfg, false);
+        let first_combo = state.swing_m_hand;
+        state.step_frame(0.032, 0.2, &sword, &off, &input, &cfg);
+        state.step_frame(0.032, 0.4, &sword, &off, &input, &cfg);
+        assert!(state.main_swing(0.4) > 0.08 && state.main_swing(0.4) < 0.35);
+
+        state.on_swing_ex(true, &sword, &cfg, false);
+        assert_ne!(state.swing_m_hand, first_combo);
+        assert_eq!(state.main_swing(0.9), 0.0);
+
+        // Continuous hold (mining / held button) must NOT reset mid-swing or flip sword combo prematurely.
+        state.step_frame(0.032, 0.5, &sword, &off, &input, &cfg);
+        let combo_before_hold = state.swing_m_hand;
+        let prog_before_hold = state.main_swing(0.5);
+        state.on_swing_ex(true, &sword, &cfg, true);
+        assert_eq!(state.swing_m_hand, combo_before_hold);
+        assert_eq!(state.main_swing(0.5), prog_before_hold);
     }
 }

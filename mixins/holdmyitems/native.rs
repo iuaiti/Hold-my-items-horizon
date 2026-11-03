@@ -20,7 +20,7 @@ use horizon_client::items::ItemStack;
 use horizon_client::mesher::Vertex;
 use horizon_client::spear::Kinetic;
 use horizon_world::consumable::UseAnimation;
-use std::cell::RefCell;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 const BUNDLED_RESOURCEPACK: &[u8] =
@@ -34,6 +34,8 @@ struct State {
     scripts_loaded: bool,
     pack_ensured: bool,
     inspect_down: bool,
+    left_continued: bool,
+    right_continued: bool,
     last_partial: f32,
     hmi: HmiState,
     /// Pre-baked local-space map vertices (`Mat4::IDENTITY`) for mainhand/offhand maps,
@@ -42,12 +44,12 @@ struct State {
     cached_maps: [Option<(i32, Vec<Vertex>)>; 2],
 }
 
-thread_local! {
-    static STATE: RefCell<State> = RefCell::new(State::default());
-}
+static STATE: OnceLock<Mutex<State>> = OnceLock::new();
 
 fn with_state<T>(run: impl FnOnce(&mut State) -> T) -> T {
-    STATE.with(|s| run(&mut s.borrow_mut()))
+    let mutex = STATE.get_or_init(|| Mutex::new(State::default()));
+    let mut guard = mutex.lock().unwrap_or_else(|e| e.into_inner());
+    run(&mut guard)
 }
 
 fn read_config(game: &Game<'_>) -> LoadedConfig {
@@ -150,18 +152,26 @@ impl Game<'_> {
         if needs_write {
             let _ = std::fs::write(&pack_path, BUNDLED_RESOURCEPACK);
         }
-        if !self.gui.atlas.sprites.contains_key("item/basket_3d") {
-            if !self
-                .settings
+        let has_sprite = self.gui.atlas.sprites.contains_key("item/basket_3d")
+            || self
+                .gui
+                .atlas
+                .sprites
+                .contains_key("minecraft:item/basket_3d");
+        let mut added_to_settings = false;
+        if !self
+            .settings
+            .resource_packs
+            .iter()
+            .any(|p| p == BUNDLED_PACK_ID)
+        {
+            self.settings
                 .resource_packs
-                .iter()
-                .any(|p| p == BUNDLED_PACK_ID)
-            {
-                self.settings
-                    .resource_packs
-                    .push(BUNDLED_PACK_ID.to_owned());
-                self.settings.save(&Self::options_path());
-            }
+                .push(BUNDLED_PACK_ID.to_owned());
+            self.settings.save(&Self::options_path());
+            added_to_settings = true;
+        }
+        if !has_sprite && (needs_write || added_to_settings) {
             self.reload_packs();
         }
     }
@@ -267,8 +277,9 @@ impl Game<'_> {
                 .models
                 .swap_animation_scale(&item_render::stack_view(s))
         });
-        let main_equip = (1.0 - heights[0] * main_scale).clamp(0.0, 1.0);
-        let off_equip = (1.0 - heights[1] * off_scale).clamp(0.0, 1.0);
+        let main_equip = ((1.0 - heights[0]) * main_scale).clamp(0.0, 1.0);
+        let off_equip = ((1.0 - heights[1]) * off_scale).clamp(0.0, 1.0);
+        let actively_playing = self.is_hmi_actively_playing();
 
         PlayerFrameInput {
             pitch: self.pitch,
@@ -284,11 +295,70 @@ impl Game<'_> {
             using_riptide: p.auto_spin_attack_ticks > 0,
             using_item: self.using.is_some(),
             active_main_hand: self.used_hand() != Some(Hand::Off),
-            inspect_held: inspect_down && self.native_playing(),
-            block_breaking: self.mining.is_some() || self.clicks.destroying.active,
+            inspect_held: inspect_down && actively_playing,
+            block_breaking: self.is_hmi_breaking_block(),
             age_ticks: self.ticks as f32 + partial,
             main_equip_progress: main_equip,
             off_equip_progress: off_equip,
+        }
+    }
+
+    #[inline]
+    fn is_hmi_actively_playing(&self) -> bool {
+        self.native_playing()
+            && self.focused
+            && self.captured
+            && !self.pause
+            && self.screen == Screen::Playing
+            && self.title.is_none()
+            && !self.dialog_open()
+    }
+
+    #[inline]
+    fn is_hmi_breaking_block(&self) -> bool {
+        if !self.is_hmi_actively_playing() || self.using.is_some() {
+            return false;
+        }
+        if self.creative && !self.res.items().can_destroy_block(self.held(), true) {
+            return false;
+        }
+        self.mining.is_some() || (self.clicks.destroying.active && self.left)
+    }
+
+    /// Sanitizes stuck mouse button (`self.left`, `self.right`) and block-destroying states
+    /// (`self.clicks.destroying.active`, `self.mining`) when screens, dialogs, pause, or
+    /// window unfocus/uncapture occur, or when holding non-mining weapons in Creative mode.
+    fn sanitize_hmi_mouse_state(&mut self) {
+        if !self.is_hmi_actively_playing() {
+            self.left = false;
+            self.right = false;
+            self.clicks.destroying.active = false;
+            if self.mining.is_some() {
+                self.stop_remote_mining();
+                self.mining = None;
+            }
+            with_state(|s| {
+                s.left_continued = false;
+                s.right_continued = false;
+            });
+            return;
+        }
+
+        // In Creative mode, weapons with `can_destroy_blocks_in_creative = false` (swords, tridents, maces)
+        // abort `self.mining` in Horizon without clearing `self.clicks.destroying.active`, which otherwise
+        // leaves continuous destroy active and forces block-breaking animations.
+        let cannot_mine_creative =
+            self.creative && !self.res.items().can_destroy_block(self.held(), true);
+        if cannot_mine_creative || self.using.is_some() {
+            if self.clicks.destroying.active {
+                self.clicks.destroying.active = false;
+            }
+            if self.mining.is_some() {
+                self.stop_remote_mining();
+                self.mining = None;
+            }
+        } else if !self.left && self.mining.is_none() && self.clicks.destroying.active {
+            self.clicks.destroying.active = false;
         }
     }
 
@@ -305,29 +375,48 @@ impl Game<'_> {
             Hand::Off => self.offhand.as_ref(),
         };
         let flags = self.classify_stack(stack, 0.0);
+        let is_main = hand == Hand::Main;
+        let breaking = self.is_hmi_breaking_block();
+        let left_now = self.left;
+        let right_now = self.right;
         with_state(|s| {
-            s.hmi.on_swing(hand == Hand::Main, &flags, &cfg);
+            let continuous_hold = if is_main {
+                let cont = breaking || (left_now && s.left_continued);
+                s.left_continued = left_now;
+                cont
+            } else {
+                let cont = right_now && s.right_continued;
+                s.right_continued = right_now;
+                cont
+            };
+            s.hmi.on_swing_ex(is_main, &flags, &cfg, continuous_hold);
         });
     }
 
-    /// `native_tick` (20 TPS): advances per-hand swing progress (`LivingEntityMixin.tick`).
+    /// `native_tick` (20 TPS): syncs haste/fatigue amplifiers and sanitizes input state.
+    /// Swing progression itself is stepped in `holdmyitems_frame` via `dt` so it never
+    /// desynchronizes or double-steps across threads.
     pub(super) fn holdmyitems_tick(&mut self) {
         if !enabled(self) || self.player.is_none() {
             return;
         }
-        let Some(cfg) = active_config(self) else {
-            return;
-        };
-        let main_flags = self.classify_stack(self.held(), 0.0);
-        let off_flags = self.classify_stack(self.offhand.as_ref(), 0.0);
+        self.sanitize_hmi_mouse_state();
+        let left_now = self.left;
+        let right_now = self.right;
         let effects = &self.potions.effects;
         let haste = effects
             .amplifier("haste")
             .max(effects.amplifier("conduit_power"));
         let fatigue = effects.amplifier("mining_fatigue");
         with_state(|s| {
-            s.hmi
-                .tick_swings(&main_flags, &off_flags, haste, fatigue, &cfg);
+            if !left_now {
+                s.left_continued = false;
+            }
+            if !right_now {
+                s.right_continued = false;
+            }
+            s.hmi.last_haste = haste;
+            s.hmi.last_fatigue = fatigue;
         });
     }
 
@@ -340,29 +429,58 @@ impl Game<'_> {
         let Some(cfg) = active_config(self) else {
             return;
         };
+        let need_pack_check = with_state(|s| {
+            load_bundled_scripts(self, s);
+            let check = !s.pack_ensured;
+            s.pack_ensured = true;
+            check
+        });
+        if need_pack_check {
+            self.ensure_bundled_hmi_pack();
+        }
         if self.player.is_none() {
             with_state(|s| {
+                s.inspect_down = false;
+                s.left_continued = false;
+                s.right_continued = false;
+                s.hmi.clear_active_swings();
                 s.hmi.particles.clear();
                 s.cached_maps = [None, None];
             });
             return;
         }
+
+        self.sanitize_hmi_mouse_state();
+
+        let actively_playing = self.is_hmi_actively_playing();
+        let left_now = self.left;
+        let right_now = self.right;
         let dt = if self.pause {
             0.0
         } else {
             elapsed.as_secs_f32().clamp(0.0, 0.05)
         };
         let partial = self.clock.fraction() as f32;
-        let (inspect_down, need_pack_check) = with_state(|s| {
-            load_bundled_scripts(self, s);
-            let check = !s.pack_ensured;
-            s.pack_ensured = true;
+        let effects = &self.potions.effects;
+        let haste = effects
+            .amplifier("haste")
+            .max(effects.amplifier("conduit_power"));
+        let fatigue = effects.amplifier("mining_fatigue");
+        let inspect_down = with_state(|s| {
+            if !actively_playing {
+                s.inspect_down = false;
+            }
+            if !left_now {
+                s.left_continued = false;
+            }
+            if !right_now {
+                s.right_continued = false;
+            }
             s.last_partial = partial;
-            (s.inspect_down, check)
+            s.hmi.last_haste = haste;
+            s.hmi.last_fatigue = fatigue;
+            s.inspect_down
         });
-        if need_pack_check {
-            self.ensure_bundled_hmi_pack();
-        }
         let main_flags = self.classify_stack(self.held(), partial);
         let off_flags = self.classify_stack(self.offhand.as_ref(), partial);
         let input = self.build_frame_input(partial, inspect_down);
@@ -744,7 +862,11 @@ impl Game<'_> {
             .first()
             .map_or(glam::Mat4::IDENTITY, |l| l.matrix);
         let layer_pose = pose * first_layer_mat;
-        let layer_pose_inv = layer_pose.inverse();
+        let layer_pose_inv = if layer_pose.determinant().abs() > 1e-6 {
+            layer_pose.inverse()
+        } else {
+            glam::Mat4::IDENTITY
+        };
         let mut sink = HmiAnimatedSink {
             world: WorldSink {
                 out,
