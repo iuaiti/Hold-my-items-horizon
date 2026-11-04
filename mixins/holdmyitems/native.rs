@@ -704,6 +704,7 @@ impl Game<'_> {
                                 light: packed_light,
                                 lights: Some(lights),
                                 glint: self.glint(),
+                                tier: 0,
                             };
                             self.pack.item_renderer.submit_special(
                                 model,
@@ -873,6 +874,7 @@ impl Game<'_> {
                 light,
                 lights: Some(lights),
                 glint: self.glint(),
+                tier: 0,
             },
             animator,
             layer_pose,
