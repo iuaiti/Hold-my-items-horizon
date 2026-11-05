@@ -15,7 +15,9 @@ pub const INSPECT_KEY_DEFAULT: &str = "key.keyboard.c";
 pub const COMMAND_HMI: &str = "hmi";
 pub const COMMAND_HOLDMYITEMS: &str = "holdmyitems";
 
-const PI: f32 = std::f32::consts::PI;
+/// Total forward (-Z) shift applied to held beds so they do not clip into the arm.
+/// Split evenly between the two bed adjustments in `apply_item_pose`.
+const BED_ARM_CLEARANCE_Z: f32 = 0.25;
 
 // ---------------------------------------------------------------------------
 // Easing functions (1:1 port of com.holdmylua.source.scripting.script_wrappers.Easings)
@@ -804,6 +806,10 @@ impl ItemFlags {
 
     pub fn is_bed(&self) -> bool {
         self.short_name().ends_with("_bed")
+    }
+
+    pub fn is_totem(&self) -> bool {
+        self.short_name() == "totem_of_undying"
     }
 
     pub fn is_banner(&self) -> bool {
@@ -3617,7 +3623,9 @@ impl HmiState {
         }
 
         if item.is_bed() {
-            mat.move_z(0.2);
+            // Keep the bed further away from the arm than other held models so its foot piece
+            // is not clipped by the arm geometry (see `BED_ARM_CLEARANCE_Z`).
+            mat.move_z(0.2 - BED_ARM_CLEARANCE_Z * 0.5);
             mat.rotate_y_at(180.0 * l, -0.15 * l, -0.4, 0.0);
         }
 
@@ -3748,7 +3756,7 @@ impl HmiState {
             mat.rotate_z(-10.0 * l);
             mat.rotate_y(-90.0 * l);
         } else if item.is_bed() {
-            mat.move_z(0.17);
+            mat.move_z(0.17 - BED_ARM_CLEARANCE_Z * 0.5);
             mat.rotate_y_at(-35.0 * l, 0.3 * l, -0.4, 0.0);
             mat.scale(0.9, 0.9, 0.9);
         }
@@ -3829,6 +3837,10 @@ impl HmiState {
             mat.rotate_x(-40.0 * sm);
             mat.rotate_y(-10.0 * l * sm);
             mat.rotate_z(5.0 * l * sm);
+        } else if item.is_totem() {
+            // Totem of Undying: hold the flat sprite upright and facing the camera, without the
+            // generic flat-item tilt (`rotate_x(-8)`, `rotate_y(-10)`, `rotate_z(6)`).
+            mat.translate(-0.02 * l, 0.04, 0.0);
         } else if item.should_translate_item(&self.overrides) {
             mat.move_x(-0.05 * l);
             mat.rotate_x(-8.0);
