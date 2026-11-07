@@ -15,9 +15,18 @@ pub const INSPECT_KEY_DEFAULT: &str = "key.keyboard.c";
 pub const COMMAND_HMI: &str = "hmi";
 pub const COMMAND_HOLDMYITEMS: &str = "holdmyitems";
 
-/// Total forward (-Z) shift applied to held beds so they do not clip into the arm.
-/// Split evenly between the two bed adjustments in `apply_item_pose`.
-const BED_ARM_CLEARANCE_Z: f32 = 0.25;
+/// Roll (degrees, around Z) applied to a trident while it is raised for a throw.
+/// The original Hold My Items script uses `170.0`, which assumes the vanilla Java in-hand model
+/// orientation. Horizon's trident model appears to be oriented 180 degrees opposite (head shown
+/// upside down when drawn), so `-10.0` (= 170 - 180) compensates. This is an in-game-unverified
+/// fix: set back to `170.0` to restore the original behavior if it looks worse.
+const TRIDENT_DRAW_ROLL_DEG: f32 = -10.0;
+
+/// Shift applied to held beds, in the item base frame *before* the bed's own rotations, so the
+/// bed model does not clip into the arm. X is multiplied by the hand sign `l` (negative = away
+/// from the arm), Z is forward (-Z). Tune these if the bed still intersects the arm.
+const BED_ARM_CLEARANCE_X: f32 = -0.15;
+const BED_ARM_CLEARANCE_Z: f32 = -0.10;
 
 // ---------------------------------------------------------------------------
 // Easing functions (1:1 port of com.holdmylua.source.scripting.script_wrappers.Easings)
@@ -3623,9 +3632,10 @@ impl HmiState {
         }
 
         if item.is_bed() {
-            // Keep the bed further away from the arm than other held models so its foot piece
-            // is not clipped by the arm geometry (see `BED_ARM_CLEARANCE_Z`).
-            mat.move_z(0.2 - BED_ARM_CLEARANCE_Z * 0.5);
+            // Keep the bed clear of the arm geometry. Applied here, before any rotation, so the
+            // offset stays in the arm's frame (a later translate would be rotated by ~145 degrees).
+            mat.translate(BED_ARM_CLEARANCE_X * l, 0.0, BED_ARM_CLEARANCE_Z);
+            mat.move_z(0.2);
             mat.rotate_y_at(180.0 * l, -0.15 * l, -0.4, 0.0);
         }
 
@@ -3756,7 +3766,7 @@ impl HmiState {
             mat.rotate_z(-10.0 * l);
             mat.rotate_y(-90.0 * l);
         } else if item.is_bed() {
-            mat.move_z(0.17 - BED_ARM_CLEARANCE_Z * 0.5);
+            mat.move_z(0.17);
             mat.rotate_y_at(-35.0 * l, 0.3 * l, -0.4, 0.0);
             mat.scale(0.9, 0.9, 0.9);
         }
@@ -3899,7 +3909,7 @@ impl HmiState {
             } else {
                 self.trident_m_o * 1.5
             };
-            mat.rotate_z(170.0 * l * easings::ease_out_back(tm.clamp(0.0, 1.0)));
+            mat.rotate_z(TRIDENT_DRAW_ROLL_DEG * l * easings::ease_out_back(tm.clamp(0.0, 1.0)));
             mat.move_z(-0.1);
             mat.rotate_y(40.0 * l);
 
