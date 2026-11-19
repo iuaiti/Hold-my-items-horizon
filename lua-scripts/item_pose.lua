@@ -136,6 +136,7 @@ renderAsBlock:put("minecraft:string", false)
 renderAsBlock:put("minecraft:resin_clump", false)
 renderAsBlock:put("minecraft:vine", false)
 renderAsBlock:put("minecraft:bamboo", false)
+renderAsBlock:put("minecraft:wheat", false)
 
 local sp = I:getUseAction(P:getMainItem(context.player)) == "spear" and 1 or 0;
 local spo = I:getUseAction(P:getOffhandItem(context.player)) == "spear" and 1 or 0;

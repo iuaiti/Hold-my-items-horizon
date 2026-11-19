@@ -1,0 +1,12 @@
+id = "holdmyitems"
+name = "Hold My Items"
+version = "5.1.1"
+description = "Hold My Items 5.1.1 for Horizon (Minecraft 26.3): first-person hand & item physics, 3D block/item poses, per-quad model articulation, weapon inspection, particles, and dynamic hand lighting."
+api = "0.2"
+side = "client"
+
+# Run `cargo horizon-mod update` against your target Horizon Nightly build
+# (for example `sdk-0b14f8a` / `sdk-6d765e0` / `sdk-dd67b76`) to populate and
+# verify the exact `[native]` SDK pin for your Horizon installation.
+[native]
+crate = "."

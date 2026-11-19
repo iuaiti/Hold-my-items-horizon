@@ -2,8 +2,13 @@
 name = "holdmyitems"
 version = "5.1.1"
 edition = "2024"
-description = "Hold My Items 5.1.1 native mod for Horizon (Minecraft 26.3): first-person hand & item physics, 3D block/item poses, per-quad model articulation, inspection, particles, and dynamic hand lighting."
+description = "Hold My Items 5.1.1 (.hmod) for Horizon (Minecraft 26.3): first-person hand & item physics, 3D block/item poses, per-quad model articulation, inspection, particles, and dynamic hand lighting."
 license = "MIT"
 
 [lib]
-path = "mixins/holdmyitems/runtime.rs"
+path = "src/lib.rs"
+
+[dependencies]
+# Uncomment once your local Horizon SDK is fetched into `.horizon/sdk/` via
+# `cargo horizon-mod check` (or `python3 tools/sdk_api_source.py build .horizon/sdk/api`):
+# horizon-mod-api = { path = ".horizon/sdk/api/crates/horizon-mod-api" }
