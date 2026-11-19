@@ -220,7 +220,7 @@ fn build_item_flags(host: &dyn ClientHost, stack: Option<&ItemStack>) -> ItemFla
     let is_charged_crossbow = short == "crossbow"
         && stack
             .components()
-            .and_then(|c| c.as_nbt().get("minecraft:charged_projectiles"))
+            .and_then(|c| c.as_nbt().get(&"minecraft:charged_projectiles".into()))
             .is_some();
 
     let is_cooling_down = use_kind == UseKind::Block
