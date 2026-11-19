@@ -1,3 +1,4 @@
+
 name: Build Hold My Items packages
 
 on:
@@ -10,39 +11,25 @@ permissions:
 
 jobs:
   package:
-<<<<<<< HEAD
-    name: Build HMod and resource pack (Ubuntu x86_64)
-=======
     name: Build HMod (WASM) and resource pack (Ubuntu x86_64)
->>>>>>> 4078815 (Port Hold My Items to Horizon Rust mod)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-<<<<<<< HEAD
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-=======
       - name: Install Rust stable with wasm32 target
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
->>>>>>> 4078815 (Port Hold My Items to Horizon Rust mod)
 
       - name: Install cargo-horizon-mod
         run: cargo install --locked --git https://github.com/horizon-rust/horizon cargo-horizon-mod
 
-<<<<<<< HEAD
-      - name: Build HMod package
-        run: cargo horizon-mod build
-=======
       - name: Build HMod WASM package
         run: cargo horizon-mod build --wasm
 
       - name: Check HMod package
         run: cargo horizon-mod check target/horizon-mod/holdmyitems.hmod
->>>>>>> 4078815 (Port Hold My Items to Horizon Rust mod)
 
       - name: Package resource pack
         run: |
