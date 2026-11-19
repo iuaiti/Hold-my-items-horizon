@@ -107,7 +107,7 @@ fn classify_item(id: &str) -> ItemKind {
         return ItemKind::Empty;
     }
     let name = id.strip_prefix("minecraft:").unwrap_or(id);
-    if name == "filled_map" || name == "map" {
+    if name == "filled_map" {
         ItemKind::Map
     } else if name.ends_with("_sword") {
         ItemKind::Sword
