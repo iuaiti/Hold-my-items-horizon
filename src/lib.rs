@@ -23,7 +23,7 @@ use mod_api::{
     ClientTickPostEvent, Flow, Hand, Hooks, InputKeyEvent, KeyAction, KeyConflictContext,
     KeyRegistration, MouseButtonPreEvent, Registrar, RegistrationContext, RenderFramePreEvent,
     RenderGuiPostEvent, RenderHandEvent, SettingChangedEvent, SettingSpec,
-    ShouldCauseReequipAnimationEvent, SoundPlay,
+    SoundPlay,
 };
 
 use crate::animations::{evaluate_hand_animation, FrameContext};
@@ -204,29 +204,6 @@ impl Hooks for HoldMyItems {
         Flow::Continue
     }
 
-    fn should_cause_reequip_animation(
-        &self,
-        host: &dyn ClientHost,
-        event: &mut ShouldCauseReequipAnimationEvent<'_>,
-    ) {
-        if !host.on(MOD_ID) {
-            return;
-        }
-        let Ok(state) = self.state.lock() else {
-            return;
-        };
-        if !state.settings.enabled {
-            return;
-        }
-        // Let HMI's smooth switch animation handle same-item NBT updates without jarring resets
-        if !event.slot_changed {
-            if let Some(old) = event.old {
-                if old.same_item(event.stack) {
-                    event.reequip = false;
-                }
-            }
-        }
-    }
 
     fn render_hand(&self, host: &dyn ClientHost, event: &mut RenderHandEvent<'_, '_>) -> Flow {
         if !host.on(MOD_ID) {
@@ -348,16 +325,20 @@ impl Hooks for HoldMyItems {
         }
 
         if state.settings.debug_overlay && is_main_hand {
-            state
-                .debug_text
-                .out(format!("[HMI v0.2] item={} action={}", item.id, item.use_action.as_str()));
-            state.debug_text.out(format!(
+            let line1 = format!(
+                "[HMI v0.2] item={} action={}",
+                item.id,
+                item.use_action.as_str()
+            );
+            let line2 = format!(
                 "swing={:.2} equip={:.2} particles={} scripts={}",
                 swing_progress,
                 event.render.equip,
                 state.particles.len(),
                 state.lua_scripts.loaded_count
-            ));
+            );
+            state.debug_text.out(line1);
+            state.debug_text.out(line2);
         }
 
         Flow::Continue
