@@ -31,7 +31,7 @@ jobs:
           test -s resourcepack/pack.mcmeta
           test -d resourcepack/assets/minecraft
           mkdir -p target/packages
-          (cd resourcepack && zip -qr ../packages/holdmyitems-resourcepack.zip .)
+          (cd resourcepack && zip -qr ../target/packages/holdmyitems-resourcepack.zip .)
           test -s target/packages/holdmyitems-resourcepack.zip
 
       - name: Verify outputs
