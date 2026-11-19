@@ -582,7 +582,7 @@ impl Hooks for HoldMyItemsMod {
                 tz += 0.12;
                 ry += 25.0 * side_sign;
             }
-            ItemKind::Empty | ItemKind::Generic => {
+            ItemKind::Map | ItemKind::Empty | ItemKind::Generic => {
                 if swing_raw > 0.001 {
                     tz -= 0.05 * swing_rot;
                     ty -= 0.04 * swing_rot;
