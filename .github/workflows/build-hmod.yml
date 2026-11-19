@@ -1,0 +1,43 @@
+name: Build Hold My Items HMod
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package .hmod (Ubuntu x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-horizon-mod
+        run: cargo install --locked --git https://github.com/horizon-rust/horizon cargo-horizon-mod
+
+      - name: Build HMod package
+        run: cargo horizon-mod build
+
+      - name: Locate package
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="target/horizon-mod/holdmyitems.hmod"
+          test -s "$FILE"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Upload downloadable HMod
+        uses: actions/upload-artifact@v4
+        with:
+          name: holdmyitems-hmod
+          path: ${{ steps.package.outputs.file }}
+          if-no-files-found: error
+          retention-days: 14
