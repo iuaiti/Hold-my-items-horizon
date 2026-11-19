@@ -9,6 +9,6 @@ publish = false
 sdk = "dd67b76ff23e28c6d8e21859df600d31572f81a0"
 
 [dependencies]
-horizon-mod-api = { path = ".horizon/sdk/crates/horizon-mod-api" }
+horizon-mod-api = { path = ".horizon/sdk/api/crates/horizon-mod-api" }
 
 [workspace]
