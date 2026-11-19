@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       sdk_api_source_url:
-        description: "Direct download URL for Horizon v0.2 api-source.tar.xz (optional if vars.HORIZON_API_SOURCE_URL is set)"
+        description: "Override download URL for Horizon v0.2 api-source.tar.xz (leave empty to use official GitHub Release)"
         required: false
         default: ""
 
@@ -21,6 +21,7 @@ env:
   MOD_VERSION: "5.1.1"
   RUST_VERSION: "1.99.1"
   SDK_COMMIT: "f00125f61f794aaa3d4e950d301f353b35b6ee3d"
+  DEFAULT_SDK_URL: "https://github.com/horizon-rust/horizon/releases/download/sdk-f00125f61f794aaa3d4e950d301f353b35b6ee3d/api-source.tar.xz"
   API_SOURCE_SHA256: "5bed678f76130a6dea6cb2adebf3204168f9ab0350cd92c0ede160ac6b0d45d7"
   CARGO_TERM_COLOR: always
 
@@ -44,7 +45,7 @@ jobs:
 
       - name: Prepare Horizon v0.2 SDK (api-source)
         env:
-          SDK_URL: ${{ github.event.inputs.sdk_api_source_url || vars.HORIZON_API_SOURCE_URL || '' }}
+          SDK_URL: ${{ github.event.inputs.sdk_api_source_url || vars.HORIZON_API_SOURCE_URL || env.DEFAULT_SDK_URL }}
         run: |
           set -euo pipefail
           SDK_DIR="../api-source"
@@ -57,15 +58,12 @@ jobs:
             mkdir -p "${SDK_DIR}"
             echo "${API_SOURCE_SHA256}  ./api-source.tar.xz" | sha256sum -c -
             tar -xmJf ./api-source.tar.xz -C "${SDK_DIR}"
-          elif [ -n "${SDK_URL}" ]; then
-            echo "Downloading Horizon v0.2 api-source.tar.xz..."
+          else
+            echo "Downloading Horizon v0.2 api-source.tar.xz from ${SDK_URL}..."
             curl -fSL "${SDK_URL}" -o /tmp/api-source.tar.xz
             echo "${API_SOURCE_SHA256}  /tmp/api-source.tar.xz" | sha256sum -c -
             mkdir -p "${SDK_DIR}"
             tar -xmJf /tmp/api-source.tar.xz -C "${SDK_DIR}"
-          else
-            echo "::error::Missing Horizon v0.2 api-source! Set repository variable HORIZON_API_SOURCE_URL or provide sdk_api_source_url via workflow_dispatch."
-            exit 1
           fi
 
       - name: Check formatting
