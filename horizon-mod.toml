@@ -1,8 +1,13 @@
 id = "holdmyitems"
 name = "Hold My Items"
 version = "5.1.1"
+<<<<<<< HEAD
 description = "Hold My Items 5.1.1 for Horizon (Minecraft 26.3): asset pack with 3D item models, textures, sounds, and Lua pose scripts."
 authors = []
+=======
+description = "Hold My Items 5.1.1 for Horizon (Minecraft 26.3): first-person hand & item physics, item-specific poses, 3D held arm, and 3D asset pack."
+authors = ["iuaiti"]
+>>>>>>> 4078815 (Port Hold My Items to Horizon Rust mod)
 api = "0.2"
 side = "client"
 capabilities = ["registries"]

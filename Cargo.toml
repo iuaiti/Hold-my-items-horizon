@@ -1,0 +1,14 @@
+[package]
+name = "holdmyitems"
+version = "5.1.1"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[package.metadata.horizon]
+sdk = "dd67b76ff23e28c6d8e21859df600d31572f81a0"
+
+[dependencies]
+horizon-mod-api = { path = ".horizon/sdk/crates/horizon-mod-api" }
+
+[workspace]
