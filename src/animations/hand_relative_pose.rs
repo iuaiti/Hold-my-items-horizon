@@ -4,7 +4,7 @@
 use crate::animations::FrameContext;
 use crate::easings;
 use crate::item_info::UseAction;
-use crate::math::{self, PoseStack};
+use crate::math::{self, PI, PoseStack};
 use crate::state::HmiState;
 
 pub fn apply_hand_relative_pose(
@@ -55,11 +55,11 @@ pub fn apply_hand_relative_pose(
     // Music disc flourish tilt on main-hand switch
     if ctx.item.is_music_disc && ctx.main_hand {
         let disc_tilt = if main_switch < 0.65245 {
-            (math::clamp(main_switch, 0.0, 0.16675) * 3.14 * 3.0).sin()
+            (math::clamp(main_switch, 0.0, 0.16675) * PI * 3.0).sin()
         } else {
             (math::clamp(main_switch, 0.65245, 1.0) * 4.4 - 1.3).sin()
         };
-        let disc_jump = (math::clamp(main_switch, 0.52459, 0.85809) * 3.14 * 3.0 - 1.8).sin();
+        let disc_jump = (math::clamp(main_switch, 0.52459, 0.85809) * PI * 3.0 - 1.8).sin();
         mat.move_y(0.06 * disc_jump.max(0.0));
         mat.rotate_z(12.0 * disc_tilt * l);
     }
