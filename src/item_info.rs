@@ -145,16 +145,19 @@ impl ItemInfo {
             return Self::empty();
         }
         let item_key = stack.item();
-        let id = mod_api::item_id(item_key)
-            .unwrap_or("minecraft:air")
-            .to_owned();
-        if id == "minecraft:air" {
+        let id = item_key.id(host);
+        if id.is_empty() || id == "minecraft:air" {
             return Self::empty();
         }
 
         let display_name = host.hover_name(stack);
         let block_key = host.item_block(item_key);
-        let enchanted = host.item_resource_foil(stack);
+        let nbt_str = stack
+            .to_nbt(host)
+            .map(|c| format!("{c:?}"))
+            .unwrap_or_default();
+        let enchanted =
+            nbt_str.contains("enchantments") || nbt_str.contains("enchantment_glint_override");
 
         let path = id.split_once(':').map(|(_, p)| p).unwrap_or(id.as_str());
 
@@ -234,7 +237,6 @@ impl ItemInfo {
 
         // Check crossbow charged projectiles component via NBT if present
         let charged_crossbow = if path == "crossbow" {
-            let nbt_str = format!("{:?}", stack.as_nbt());
             nbt_str.contains("charged_projectiles") && !nbt_str.contains("charged_projectiles: []")
         } else {
             false
