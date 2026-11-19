@@ -17,6 +17,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+        
+      - name: Checkout pinned Horizon SDK
+        run: |
+          set -euo pipefail
+          mkdir -p .horizon
+          git clone --filter=blob:none --no-checkout \
+            https://github.com/horizon-rust/horizon .horizon/sdk
+          git -C .horizon/sdk fetch --depth 1 origin \
+            dd67b76ff23e28c6d8e21859df600d31572f81a0
+          git -C .horizon/sdk checkout --detach \
+            dd67b76ff23e28c6d8e21859df600d31572f81a0
+          test -f .horizon/sdk/crates/horizon-mod-api/Cargo.toml
+
       - name: Install Rust stable with wasm32 target
         uses: dtolnay/rust-toolchain@stable
         with:
