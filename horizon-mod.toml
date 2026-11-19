@@ -1,6 +1,3 @@
-# Horizon v0.2 Mod Manifest (package_format = 6)
-# Target SDK: sdk-f00125f61f794aaa3d4e950d301f353b35b6ee3d (Game 26.3, Rust 1.99.1)
-
 id = "holdmyitems"
 name = "Hold My Items"
 version = "5.1.1"
@@ -8,15 +5,6 @@ description = "First-person hand, item, block, camera, and particle animation ov
 authors = ["sapling"]
 license = "CC0-1.0"
 icon = "assets/holdmyitems/icon.png"
-
 api = "0.2"
-package_format = 6
 side = "client"
-namespaces = ["holdmyitems", "minecraft"]
-capabilities = ["game-read", "hud", "render", "input", "registries"]
-
-[sdk]
-commit = "f00125f61f794aaa3d4e950d301f353b35b6ee3d"
-game = "26.3"
-rust = "1.99.1"
-surface_hash = "e7e4b83e187a4501938e6713364acc1c"
+capabilities = ["registries"]
