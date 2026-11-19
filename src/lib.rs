@@ -418,10 +418,8 @@ impl Hooks for HoldMyItemsMod {
             (hs.pitch_angle, hs.yaw_angle, hs.switch_anim, hs.use_anim)
         };
 
-        // Skip overriding full-screen maps beyond subtle sway
+        // Match the backup implementation: let vanilla render filled maps unchanged.
         if kind == ItemKind::Map {
-            event.render.rotation[0] += (pitch_angle * 0.25).clamp(-10.0, 10.0);
-            event.render.rotation[1] += (-yaw_angle * 0.25).clamp(-10.0, 10.0);
             return Flow::Continue;
         }
 
@@ -582,7 +580,9 @@ impl Hooks for HoldMyItemsMod {
                 tz += 0.12;
                 ry += 25.0 * side_sign;
             }
-            ItemKind::Map | ItemKind::Empty | ItemKind::Generic => {
+            // Unreachable in normal flow: maps return to vanilla rendering above.
+            ItemKind::Map => {}
+            ItemKind::Empty | ItemKind::Generic => {
                 if swing_raw > 0.001 {
                     tz -= 0.05 * swing_rot;
                     ty -= 0.04 * swing_rot;
