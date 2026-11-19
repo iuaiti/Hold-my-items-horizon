@@ -1,8 +1,22 @@
+# Horizon v0.2 Mod Manifest (package_format = 6)
+# Target SDK: sdk-f00125f61f794aaa3d4e950d301f353b35b6ee3d (Game 26.3, Rust 1.99.1)
+
 id = "holdmyitems"
 name = "Hold My Items"
 version = "5.1.1"
-description = "Hold My Items 5.1.1 for Horizon (Minecraft 26.3): first-person hand & item physics, item-specific poses, 3D held arm, and 3D asset pack."
-authors = ["iuaiti"]
+description = "First-person hand, item, block, camera, and particle animation overhaul ported from Hold My Items 5.1.1 to Horizon v0.2."
+authors = ["sapling"]
+license = "CC0-1.0"
+icon = "assets/holdmyitems/icon.png"
+
 api = "0.2"
+package_format = 6
 side = "client"
-capabilities = ["registries"]
+namespaces = ["holdmyitems", "minecraft"]
+capabilities = ["game-read", "hud", "render", "input", "registries"]
+
+[sdk]
+commit = "f00125f61f794aaa3d4e950d301f353b35b6ee3d"
+game = "26.3"
+rust = "1.99.1"
+surface_hash = "e7e4b83e187a4501938e6713364acc1c"

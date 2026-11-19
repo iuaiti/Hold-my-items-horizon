@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "mod_id": "holdmyitems",
+  "mod_version": "5.1.1",
+  "content_api": "0.2",
+  "package_format": 6,
+  "target_sdk": {
+    "commit": "f00125f61f794aaa3d4e950d301f353b35b6ee3d",
+    "game": "26.3",
+    "date": "2026-11-19",
+    "rust": "1.99.1",
+    "surface_hash": "e7e4b83e187a4501938e6713364acc1c"
+  }
+}

@@ -1,0 +1,134 @@
+name: Build Hold My Items (Horizon v0.2)
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      sdk_api_source_url:
+        description: "Direct download URL for Horizon v0.2 api-source.tar.xz (optional if vars.HORIZON_API_SOURCE_URL is set)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+env:
+  MOD_ID: holdmyitems
+  MOD_VERSION: "5.1.1"
+  RUST_VERSION: "1.99.1"
+  SDK_COMMIT: "f00125f61f794aaa3d4e950d301f353b35b6ee3d"
+  API_SOURCE_SHA256: "5bed678f76130a6dea6cb2adebf3204168f9ab0350cd92c0ede160ac6b0d45d7"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Check, Build & Package (.hmod)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust ${{ env.RUST_VERSION }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Prepare Horizon v0.2 SDK (api-source)
+        env:
+          SDK_URL: ${{ github.event.inputs.sdk_api_source_url || vars.HORIZON_API_SOURCE_URL || '' }}
+        run: |
+          set -euo pipefail
+          SDK_DIR="../api-source"
+
+          if [ -d "${SDK_DIR}/crates/horizon-mod-api" ]; then
+            echo "Found existing api-source at ${SDK_DIR}"
+          elif [ -d "./api-source/crates/horizon-mod-api" ]; then
+            ln -s "${PWD}/api-source" "${SDK_DIR}"
+          elif [ -f "./api-source.tar.xz" ]; then
+            mkdir -p "${SDK_DIR}"
+            echo "${API_SOURCE_SHA256}  ./api-source.tar.xz" | sha256sum -c -
+            tar -xmJf ./api-source.tar.xz -C "${SDK_DIR}"
+          elif [ -n "${SDK_URL}" ]; then
+            echo "Downloading Horizon v0.2 api-source.tar.xz..."
+            curl -fSL "${SDK_URL}" -o /tmp/api-source.tar.xz
+            echo "${API_SOURCE_SHA256}  /tmp/api-source.tar.xz" | sha256sum -c -
+            mkdir -p "${SDK_DIR}"
+            tar -xmJf /tmp/api-source.tar.xz -C "${SDK_DIR}"
+          else
+            echo "::error::Missing Horizon v0.2 api-source! Set repository variable HORIZON_API_SOURCE_URL or provide sdk_api_source_url via workflow_dispatch."
+            exit 1
+          fi
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Build native release library
+        run: cargo build --release
+
+      - name: Build WebAssembly module (mod.wasm)
+        run: cargo build --release --target wasm32-unknown-unknown
+
+      - name: Package .hmod archive (package_format 6)
+        run: |
+          set -euo pipefail
+          STAGE="$(mktemp -d)"
+          mkdir -p dist
+
+          cp horizon-mod.toml "${STAGE}/horizon-mod.toml"
+          cp sdk-target.json "${STAGE}/sdk-target.json"
+          cp -r assets "${STAGE}/assets"
+
+          WASM_BIN="target/wasm32-unknown-unknown/release/${MOD_ID}.wasm"
+          if [ -f "${WASM_BIN}" ]; then
+            cp "${WASM_BIN}" "${STAGE}/mod.wasm"
+          else
+            echo "::error::Expected ${WASM_BIN} was not produced."
+            exit 1
+          fi
+
+          HMOD_NAME="${MOD_ID}-${MOD_VERSION}-horizon-v0.2.hmod"
+          (cd "${STAGE}" && zip -rq "${GITHUB_WORKSPACE}/dist/${HMOD_NAME}" .)
+
+          NATIVE_LIB="target/release/lib${MOD_ID}.so"
+          if [ -f "${NATIVE_LIB}" ]; then
+            cp "${NATIVE_LIB}" "dist/${MOD_ID}-${MOD_VERSION}-linux-x86_64.so"
+          fi
+
+          ls -lh dist/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.MOD_ID }}-horizon-v0.2-${{ env.SDK_COMMIT }}
+          path: dist/*
+          retention-days: 30
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.MOD_ID }}-horizon-v0.2-${{ env.SDK_COMMIT }}
+          path: dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/*

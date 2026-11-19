@@ -2,13 +2,26 @@
 name = "holdmyitems"
 version = "5.1.1"
 edition = "2024"
-license = "MIT"
+license = "CC0-1.0"
+description = "Hold My Items 5.1.1 ported to Horizon v0.2 SDK (sdk-f00125f61f794aaa3d4e950d301f353b35b6ee3d)"
+authors = ["sapling", "Horizon Port"]
 publish = false
 
-[package.metadata.horizon]
-sdk = "dd67b76ff23e28c6d8e21859df600d31572f81a0"
+[lib]
+name = "holdmyitems"
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-horizon-mod-api = { path = ".horizon/sdk/api/crates/horizon-mod-api" }
+# Horizon v0.2 Mod API (library name: `mod_api`).
+# Point `path` to your extracted `api-source/crates/horizon-mod-api` or let
+# the Horizon launcher / `cargo horizon-mod` inject the SDK dependency.
+horizon-mod-api = { path = "../api-source/crates/horizon-mod-api" }
+glam = "0.30"
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
-[workspace]
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

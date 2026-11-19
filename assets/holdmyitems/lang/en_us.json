@@ -1,0 +1,22 @@
+{
+  "key.categories.holdmyitems": "Hold My Items",
+  "key.holdmyitems.inspect": "Inspect Held Item",
+  "setting.holdmyitems.enabled": "Enable Hold My Items",
+  "setting.holdmyitems.enabled.tooltip": "Toggle first-person hand and item animations.",
+  "setting.holdmyitems.x_offset": "Hand X Offset",
+  "setting.holdmyitems.x_offset.tooltip": "Horizontal offset applied to first-person hands (-1.0 to 1.0).",
+  "setting.holdmyitems.y_offset": "Hand Y Offset",
+  "setting.holdmyitems.y_offset.tooltip": "Vertical offset applied to first-person hands (-1.0 to 1.0).",
+  "setting.holdmyitems.z_offset": "Hand Z Offset",
+  "setting.holdmyitems.z_offset.tooltip": "Depth offset applied to first-person hands (-1.0 to 1.0).",
+  "setting.holdmyitems.camera_shake": "Camera Motion & Shake",
+  "setting.holdmyitems.camera_shake.tooltip": "Enable subtle camera tilt and recoil synchronized with hand animations.",
+  "setting.holdmyitems.particles": "First-Person Particles",
+  "setting.holdmyitems.particles.tooltip": "Enable custom first-person item and screen-space particles (torches, lanterns, swings, petals).",
+  "setting.holdmyitems.render_blocks_3d": "3D Block-in-Hand Rendering",
+  "setting.holdmyitems.render_blocks_3d.tooltip": "Render held block items with full block-model lighting and placement poses.",
+  "setting.holdmyitems.sound_effects": "Animation Sound Effects",
+  "setting.holdmyitems.sound_effects.tooltip": "Play custom sword slash and interaction sounds.",
+  "setting.holdmyitems.debug_overlay": "Debug Overlay",
+  "setting.holdmyitems.debug_overlay.tooltip": "Show Hold My Items animation telemetry in the top-left HUD."
+}
