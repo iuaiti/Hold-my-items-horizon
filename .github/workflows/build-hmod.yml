@@ -1,4 +1,4 @@
-name: Build Hold My Items HMod
+name: Build Hold My Items packages
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   package:
-    name: Package .hmod (Ubuntu x86_64)
+    name: Build HMod and resource pack (Ubuntu x86_64)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -25,19 +25,34 @@ jobs:
       - name: Build HMod package
         run: cargo horizon-mod build
 
-      - name: Locate package
-        id: package
-        shell: bash
+      - name: Package resource pack
         run: |
           set -euo pipefail
-          FILE="target/horizon-mod/holdmyitems.hmod"
-          test -s "$FILE"
-          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          test -s resourcepack/pack.mcmeta
+          test -d resourcepack/assets/minecraft
+          mkdir -p target/packages
+          (cd resourcepack && zip -qr ../packages/holdmyitems-resourcepack.zip .)
+          test -s target/packages/holdmyitems-resourcepack.zip
 
-      - name: Upload downloadable HMod
+      - name: Verify outputs
+        run: |
+          set -euo pipefail
+          test -s target/horizon-mod/holdmyitems.hmod
+          unzip -l target/packages/holdmyitems-resourcepack.zip | grep -q 'assets/minecraft/items/'
+          unzip -l target/packages/holdmyitems-resourcepack.zip | grep -q 'pack.mcmeta'
+
+      - name: Upload HMod
         uses: actions/upload-artifact@v4
         with:
           name: holdmyitems-hmod
-          path: ${{ steps.package.outputs.file }}
+          path: target/horizon-mod/holdmyitems.hmod
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload resource pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: holdmyitems-resourcepack
+          path: target/packages/holdmyitems-resourcepack.zip
           if-no-files-found: error
           retention-days: 14

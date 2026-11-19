@@ -1,25 +1,31 @@
-# Hold My Items 5.1.1 for Horizon (.hmod)
+# Hold My Items 5.1.1 for Horizon (Minecraft 26.3)
 
-Content-only Horizon mod package for Minecraft 26.3.
+This repository produces **two separate deliverables**:
 
-## Included content
+1. `holdmyitems.hmod` — a content-only Horizon mod containing files in the mod's own `holdmyitems` namespace.
+2. `holdmyitems-resourcepack.zip` — the original Minecraft resource-pack overrides, preserving the `assets/minecraft/` paths required for vanilla item models, textures, sounds, and OptiFine emissive properties.
 
-- 3D item models and textures for boats, buckets, flowers, and other items
-- Item and particle textures
-- Custom sounds
-- Lua pose/model scripts under `assets/minecraft/holdmyitems/`
+## Why these are separate
 
-## Important limitation
+Horizon content mods cannot claim arbitrary files in the `minecraft` namespace. The resource-pack overrides therefore remain in a standalone resource pack instead of being forced into the `.hmod` package or renamed (which would break vanilla resource locations).
 
-This repository is packaged as a **content-only `.hmod`**. The former Rust native-mod implementation has been removed. First-person rendering hooks, runtime physics, weapon inspection, dynamic hand lighting, and in-game commands are not provided by this content-only package.
+The Lua scripts are retained in the resource pack at their original `assets/minecraft/holdmyitems/` paths and also included under the mod's owned namespace in the `.hmod`.
+
+## Contents
+
+- `resourcepack/assets/minecraft/` — vanilla item definitions, models, textures, particles, sounds, OptiFine emissive properties, and Lua scripts.
+- `assets/holdmyitems/holdmyitems/` — Lua scripts included in the Horizon mod's own namespace.
+- `lua-scripts/` — editable source copies of the Lua scripts.
 
 ## Build
 
-The GitHub Actions workflow builds the `.hmod` on Ubuntu x86_64 and uploads it as the `holdmyitems-hmod` artifact.
+The GitHub Actions workflow builds both deliverables on Ubuntu x86_64:
 
-You can also build locally with the Horizon CLI:
+- `holdmyitems-hmod` — contains `holdmyitems.hmod`.
+- `holdmyitems-resourcepack` — contains `holdmyitems-resourcepack.zip`.
 
-```bash
-cargo install --locked --git https://github.com/horizon-rust/horizon cargo-horizon-mod
-cargo horizon-mod build
-```
+Install the ZIP as a normal Minecraft resource pack. Enable it in the resource-pack settings. The `.hmod` is installed separately through Horizon.
+
+## Important limitation
+
+This is a content/resource-pack port, not the former native runtime implementation. First-person rendering hooks, runtime physics, weapon inspection, dynamic hand lighting, and in-game commands are not supplied by these packages.
