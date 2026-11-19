@@ -13,30 +13,50 @@ jobs:
   package:
     name: Build HMod (WASM) and resource pack (Ubuntu x86_64)
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout project
         uses: actions/checkout@v4
 
-        
       - name: Checkout pinned Horizon SDK
         run: |
           set -euo pipefail
+
           mkdir -p .horizon
+
           git clone --filter=blob:none --no-checkout \
             https://github.com/horizon-rust/horizon .horizon/sdk
+
           git -C .horizon/sdk fetch --depth 1 origin \
             dd67b76ff23e28c6d8e21859df600d31572f81a0
+
           git -C .horizon/sdk checkout --detach \
             dd67b76ff23e28c6d8e21859df600d31572f81a0
+
           test -f .horizon/sdk/crates/horizon-mod-api/Cargo.toml
 
-      - name: Install Rust stable with wasm32 target
+      - name: Install Rust stable with WASM target
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
 
       - name: Install cargo-horizon-mod
-        run: cargo install --locked --git https://github.com/horizon-rust/horizon cargo-horizon-mod
+        run: |
+          cargo install --locked \
+            --git https://github.com/horizon-rust/horizon \
+            --rev dd67b76ff23e28c6d8e21859df600d31572f81a0 \
+            cargo-horizon-mod
+
+      - name: Verify SDK and toolchain
+        run: |
+          set -euo pipefail
+
+          test -f .horizon/sdk/crates/horizon-mod-api/Cargo.toml
+
+          rustup run 1.99.1 rustc --version
+          rustup run 1.99.1 cargo --version
+
+          cargo horizon-mod --version
 
       - name: Build HMod WASM package
         run: cargo horizon-mod build --wasm
@@ -47,18 +67,30 @@ jobs:
       - name: Package resource pack
         run: |
           set -euo pipefail
+
           test -s resourcepack/pack.mcmeta
           test -d resourcepack/assets/minecraft
+
           mkdir -p target/packages
-          (cd resourcepack && zip -qr ../target/packages/holdmyitems-resourcepack.zip .)
+
+          (
+            cd resourcepack
+            zip -qr ../target/packages/holdmyitems-resourcepack.zip .
+          )
+
           test -s target/packages/holdmyitems-resourcepack.zip
 
       - name: Verify outputs
         run: |
           set -euo pipefail
+
           test -s target/horizon-mod/holdmyitems.hmod
-          unzip -l target/packages/holdmyitems-resourcepack.zip | grep -q 'assets/minecraft/items/'
-          unzip -l target/packages/holdmyitems-resourcepack.zip | grep -q 'pack.mcmeta'
+
+          unzip -l target/packages/holdmyitems-resourcepack.zip \
+            | grep -q 'assets/minecraft/items/'
+
+          unzip -l target/packages/holdmyitems-resourcepack.zip \
+            | grep -q 'pack.mcmeta'
 
       - name: Upload HMod
         uses: actions/upload-artifact@v4
