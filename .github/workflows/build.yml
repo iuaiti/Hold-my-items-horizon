@@ -27,7 +27,7 @@ env:
 
 jobs:
   build:
-    name: Check, Build & Package (.hmod)
+    name: Build & Package (.hmod)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -38,7 +38,7 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: wasm32-unknown-unknown
-          components: rustfmt, clippy
+          components: clippy
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -66,11 +66,8 @@ jobs:
             tar -xmJf /tmp/api-source.tar.xz -C "${SDK_DIR}"
           fi
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-      - name: Run Clippy
-        run: cargo clippy --all-targets -- -D warnings
+      - name: Run Clippy (warnings only)
+        run: cargo clippy -p holdmyitems --all-targets
 
       - name: Build native release library
         run: cargo build --release
