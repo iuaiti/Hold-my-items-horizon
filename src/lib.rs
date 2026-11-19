@@ -144,7 +144,7 @@ impl Hooks for HoldMyItems {
         state.tick_progress = event.world_partial_tick;
 
         // Flush any queued local sounds (e.g. sword slashy.ogg)
-        let sounds: Vec<(String, f32, f32)> = state.pending_sounds.drain(..).collect();
+        let sounds = std::mem::take(&mut state.pending_sounds);
         drop(state);
 
         for (id, volume, pitch) in sounds {
@@ -366,10 +366,10 @@ impl Hooks for HoldMyItems {
         if !host.on(MOD_ID) {
             return;
         }
-        if let Ok(mut state) = self.state.lock() {
-            if !state.debug_text.lines().is_empty() {
-                state.debug_text.render_and_clear(event.draw);
-            }
+        if let Ok(mut state) = self.state.lock()
+            && !state.debug_text.lines().is_empty()
+        {
+            state.debug_text.render_and_clear(event.draw);
         }
     }
 }
