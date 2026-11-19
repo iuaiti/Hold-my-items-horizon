@@ -5,3 +5,4 @@ description = "Hold My Items 5.1.1 for Horizon (Minecraft 26.3): asset pack with
 authors = []
 api = "0.2"
 side = "client"
+capabilities = ["registries"]
