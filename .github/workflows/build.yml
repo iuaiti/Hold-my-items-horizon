@@ -82,7 +82,6 @@ jobs:
           mkdir -p dist
 
           cp horizon-mod.toml "${STAGE}/horizon-mod.toml"
-          cp sdk-target.json "${STAGE}/sdk-target.json"
           cp -r assets "${STAGE}/assets"
 
           WASM_BIN="target/wasm32-unknown-unknown/release/${MOD_ID}.wasm"
