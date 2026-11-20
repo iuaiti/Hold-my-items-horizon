@@ -95,9 +95,7 @@ jobs:
           if idx != -1:
               section = ref[idx:].strip()
               with open(sys.argv[2], "a") as out:
-                  out.write("
-" + section + "
-")
+                  out.write("\n" + section + "\n")
           PY
             echo "=== Final horizon-mod.toml ==="
             cat horizon-mod.toml
