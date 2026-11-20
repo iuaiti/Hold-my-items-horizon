@@ -77,6 +77,16 @@ jobs:
             fi
           fi
 
+      - name: Ensure assets stay inside mod namespace (assets/holdmyitems/)
+        run: |
+          set -euo pipefail
+          if [ -d "assets/minecraft" ]; then
+            mkdir -p "assets/${MOD_ID}"
+            cp -rn assets/minecraft/* "assets/${MOD_ID}/" || true
+            rm -rf assets/minecraft
+            echo "Moved legacy assets/minecraft/* into assets/${MOD_ID}/"
+          fi
+
       - name: Ensure exact [wasm] manifest section for SDK ${{ env.SDK_COMMIT }}
         run: |
           set -euo pipefail
