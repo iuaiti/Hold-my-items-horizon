@@ -104,7 +104,7 @@ impl Hooks for HoldMyItems {
 
     fn client_setup(&self, host: &mut dyn ClientHost, _event: &mut ClientSetupEvent) {
         if let Ok(mut state) = self.state.lock() {
-            state.settings.refresh(host);
+            state.settings_dirty = true;
             lua_loader::reload_lua_resources(host, &mut state);
         }
         log::info!("[HoldMyItems] Initialized for Horizon v0.2 (SDK f00125f6).");
@@ -116,14 +116,14 @@ impl Hooks for HoldMyItems {
         _event: &mut ClientResourcesReloadedEvent,
     ) {
         if let Ok(mut state) = self.state.lock() {
-            state.settings.refresh(host);
+            state.settings_dirty = true;
             lua_loader::reload_lua_resources(host, &mut state);
         }
     }
 
-    fn setting_changed(&self, host: &mut dyn ClientHost, _event: &mut SettingChangedEvent<'_>) {
+    fn setting_changed(&self, _host: &mut dyn ClientHost, _event: &mut SettingChangedEvent<'_>) {
         if let Ok(mut state) = self.state.lock() {
-            state.settings.refresh(host);
+            state.settings_dirty = true;
         }
     }
 
@@ -162,6 +162,11 @@ impl Hooks for HoldMyItems {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
+
+        if state.settings_dirty && host.camera().is_some() {
+            state.settings.refresh(host);
+            state.settings_dirty = false;
+        }
 
         state.inspect_held = host.is_down(MOD_ID, "inspect");
 
