@@ -373,11 +373,3 @@ impl Hooks for HoldMyItems {
         }
     }
 }
-
-/// Backing shared group state array required when linking standalone `mod.wasm`
-/// on `wasm32-unknown-unknown` without a separate `horizon-wasm-std.wasm` member.
-#[cfg(target_arch = "wasm32")]
-#[unsafe(no_mangle)]
-#[allow(non_upper_case_globals)]
-pub static horizon_group_state: [std::sync::atomic::AtomicUsize; mod_api::wire::GROUP_WORDS] =
-    [const { std::sync::atomic::AtomicUsize::new(0) }; mod_api::wire::GROUP_WORDS];
