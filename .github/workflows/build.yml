@@ -27,7 +27,7 @@ env:
 
 jobs:
   build:
-    name: Build & Package (.hmod)
+    name: Build & Package Official .hmod (Wasm)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -43,63 +43,78 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
+      - name: Cache cargo-horizon-mod CLI (${{ env.SDK_COMMIT }})
+        id: cache-cli
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-horizon-mod
+          key: cargo-horizon-mod-${{ runner.os }}-${{ env.SDK_COMMIT }}
+
+      - name: Install cargo-horizon-mod (${{ env.SDK_COMMIT }})
+        if: steps.cache-cli.outputs.cache-hit != 'true'
+        run: |
+          cargo install --locked --git https://github.com/horizon-rust/horizon --rev "${SDK_COMMIT}" cargo-horizon-mod
+
       - name: Prepare Horizon v0.2 SDK (api-source)
         env:
           SDK_URL: ${{ github.event.inputs.sdk_api_source_url || vars.HORIZON_API_SOURCE_URL || env.DEFAULT_SDK_URL }}
         run: |
           set -euo pipefail
           SDK_DIR="../api-source"
+          if [ ! -d "${SDK_DIR}/crates/horizon-mod-api" ]; then
+            if [ -d "./api-source/crates/horizon-mod-api" ]; then
+              ln -s "${PWD}/api-source" "${SDK_DIR}"
+            elif [ -f "./api-source.tar.xz" ]; then
+              mkdir -p "${SDK_DIR}"
+              echo "${API_SOURCE_SHA256}  ./api-source.tar.xz" | sha256sum -c -
+              tar -xmJf ./api-source.tar.xz -C "${SDK_DIR}"
+            else
+              echo "Downloading Horizon v0.2 api-source.tar.xz from ${SDK_URL}..."
+              curl -fSL "${SDK_URL}" -o /tmp/api-source.tar.xz
+              echo "${API_SOURCE_SHA256}  /tmp/api-source.tar.xz" | sha256sum -c -
+              mkdir -p "${SDK_DIR}"
+              tar -xmJf /tmp/api-source.tar.xz -C "${SDK_DIR}"
+            fi
+          fi
 
-          if [ -d "${SDK_DIR}/crates/horizon-mod-api" ]; then
-            echo "Found existing api-source at ${SDK_DIR}"
-          elif [ -d "./api-source/crates/horizon-mod-api" ]; then
-            ln -s "${PWD}/api-source" "${SDK_DIR}"
-          elif [ -f "./api-source.tar.xz" ]; then
-            mkdir -p "${SDK_DIR}"
-            echo "${API_SOURCE_SHA256}  ./api-source.tar.xz" | sha256sum -c -
-            tar -xmJf ./api-source.tar.xz -C "${SDK_DIR}"
-          else
-            echo "Downloading Horizon v0.2 api-source.tar.xz from ${SDK_URL}..."
-            curl -fSL "${SDK_URL}" -o /tmp/api-source.tar.xz
-            echo "${API_SOURCE_SHA256}  /tmp/api-source.tar.xz" | sha256sum -c -
-            mkdir -p "${SDK_DIR}"
-            tar -xmJf /tmp/api-source.tar.xz -C "${SDK_DIR}"
+      - name: Ensure exact [wasm] manifest section for SDK ${{ env.SDK_COMMIT }}
+        run: |
+          set -euo pipefail
+          if ! grep -q '^\[wasm\]' horizon-mod.toml; then
+            TMP_SAMPLE="$(mktemp -d)"
+            cargo horizon-mod new "${TMP_SAMPLE}/probe" --template wasm --horizon "${SDK_COMMIT}"
+            echo "=== Generated reference horizon-mod.toml ==="
+            cat "${TMP_SAMPLE}/probe/horizon-mod.toml"
+            python3 - "${TMP_SAMPLE}/probe/horizon-mod.toml" horizon-mod.toml <<'PY'
+          import sys
+          with open(sys.argv[1]) as f:
+              ref = f.read()
+          idx = ref.find("[wasm]")
+          if idx == -1:
+              idx = ref.find("[native]")
+          if idx != -1:
+              section = ref[idx:].strip()
+              with open(sys.argv[2], "a") as out:
+                  out.write("
+" + section + "
+")
+          PY
+            echo "=== Final horizon-mod.toml ==="
+            cat horizon-mod.toml
           fi
 
       - name: Run Clippy (warnings only)
         run: cargo clippy -p holdmyitems --all-targets
 
-      - name: Build native release library
-        run: cargo build --release
-
-      - name: Build WebAssembly module (mod.wasm)
-        run: cargo build --release --target wasm32-unknown-unknown
-
-      - name: Package .hmod archive (package_format 6)
+      - name: Build & verify official .hmod via cargo horizon-mod
         run: |
           set -euo pipefail
-          STAGE="$(mktemp -d)"
+          cargo horizon-mod build --wasm
           mkdir -p dist
-
-          cp horizon-mod.toml "${STAGE}/horizon-mod.toml"
-          cp -r assets "${STAGE}/assets"
-
-          WASM_BIN="target/wasm32-unknown-unknown/release/${MOD_ID}.wasm"
-          if [ -f "${WASM_BIN}" ]; then
-            cp "${WASM_BIN}" "${STAGE}/mod.wasm"
-          else
-            echo "::error::Expected ${WASM_BIN} was not produced."
-            exit 1
-          fi
-
-          HMOD_NAME="${MOD_ID}-${MOD_VERSION}-horizon-v0.2.hmod"
-          (cd "${STAGE}" && zip -rq "${GITHUB_WORKSPACE}/dist/${HMOD_NAME}" .)
-
-          NATIVE_LIB="target/release/lib${MOD_ID}.so"
-          if [ -f "${NATIVE_LIB}" ]; then
-            cp "${NATIVE_LIB}" "dist/${MOD_ID}-${MOD_VERSION}-linux-x86_64.so"
-          fi
-
+          HMOD_SRC="target/horizon-mod/${MOD_ID}.hmod"
+          HMOD_OUT="dist/${MOD_ID}-${MOD_VERSION}-horizon-v0.2.hmod"
+          cp "${HMOD_SRC}" "${HMOD_OUT}"
+          cargo horizon-mod check "${HMOD_OUT}"
           ls -lh dist/
 
       - name: Upload build artifacts
