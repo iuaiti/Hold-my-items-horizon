@@ -1,7 +1,10 @@
 //! Item inspection helpers ported from `I.java`, `JSItems.java`, `JSTags.java`,
 //! and `SpearData.java`.
+//!
+//! Uses pure item-id classification instead of `host.tags()` so it never faults
+//! with `Missing("tags")` inside client-only `render_hand` hooks on wasm.
 
-use mod_api::{BlockKey, ClientHost, Identifier, ItemStack};
+use mod_api::{BlockKey, ClientHost, ItemStack};
 
 use crate::state::HmiState;
 
@@ -133,11 +136,7 @@ impl ItemInfo {
         }
     }
 
-    pub fn from_stack(
-        host: &dyn ClientHost,
-        stack: Option<&ItemStack>,
-        ticks_used: i32,
-    ) -> Self {
+    pub fn from_stack(host: &dyn ClientHost, stack: Option<&ItemStack>, ticks_used: i32) -> Self {
         let Some(stack) = stack else {
             return Self::empty();
         };
@@ -150,33 +149,16 @@ impl ItemInfo {
             return Self::empty();
         }
 
-        let display_name = host.hover_name(stack);
+        let display_name = id.clone();
         let block_key = host.item_block(item_key);
-        let nbt_str = stack
-            .to_nbt(host)
-            .map(|c| format!("{c:?}"))
-            .unwrap_or_default();
-        let enchanted =
-            nbt_str.contains("enchantments") || nbt_str.contains("enchantment_glint_override");
-
         let path = id.split_once(':').map(|(_, p)| p).unwrap_or(id.as_str());
 
-        let has_tag = |tag_str: &str| -> bool {
-            let Ok(ident) = Identifier::parse(tag_str) else {
-                return false;
-            };
-            host.tags()
-                .key(&ident)
-                .and_then(|tk| host.tags().is_in_tag(item_key, tk))
-                .unwrap_or(false)
-        };
-
-        let is_sword = has_tag("minecraft:swords") || path.ends_with("_sword");
-        let is_axe = has_tag("minecraft:axes") || path.ends_with("_axe");
-        let is_pickaxe = has_tag("minecraft:pickaxes") || path.ends_with("_pickaxe");
-        let is_shovel = has_tag("minecraft:shovels") || path.ends_with("_shovel");
-        let is_hoe = has_tag("minecraft:hoes") || path.ends_with("_hoe");
-        let is_mace = path == "mace" || has_tag("c:tools/mace");
+        let is_sword = path.ends_with("_sword");
+        let is_axe = path.ends_with("_axe");
+        let is_pickaxe = path.ends_with("_pickaxe");
+        let is_shovel = path.ends_with("_shovel");
+        let is_hoe = path.ends_with("_hoe");
+        let is_mace = path == "mace";
         let is_spear = path.ends_with("_spear") || path == "spear";
         let is_tool = is_sword
             || is_axe
@@ -185,18 +167,19 @@ impl ItemInfo {
             || is_hoe
             || is_mace
             || is_spear
-            || has_tag("c:tools")
             || path == "shears"
             || path == "flint_and_steel"
             || path == "brush";
-        let is_rod = has_tag("c:rods")
-            || path == "stick"
-            || path == "blaze_rod"
-            || path == "breeze_rod"
-            || path == "fishing_rod"
-            || path == "carrot_on_a_stick"
-            || path == "warped_fungus_on_a_stick"
-            || path == "end_rod";
+        let is_rod = matches!(
+            path,
+            "stick"
+                | "blaze_rod"
+                | "breeze_rod"
+                | "fishing_rod"
+                | "carrot_on_a_stick"
+                | "warped_fungus_on_a_stick"
+                | "end_rod"
+        );
         let is_throwable = matches!(
             path,
             "snowball"
@@ -213,30 +196,59 @@ impl ItemInfo {
         let is_torch = path.contains("torch");
         let is_bucket = path.ends_with("_bucket") || path == "bucket";
         let is_boat = path.ends_with("_boat") || path.ends_with("_raft");
-        let is_bundle = has_tag("minecraft:bundles") || path.ends_with("bundle");
+        let is_bundle = path.ends_with("bundle");
         let is_map = path == "filled_map" || path == "map";
-        let is_skull = has_tag("minecraft:skulls")
-            || path.ends_with("_head")
-            || path.ends_with("_skull");
-        let is_music_disc = has_tag("c:music_discs") || path.starts_with("music_disc_");
-        let is_nugget = has_tag("c:nuggets") || path.ends_with("_nugget");
-        let is_flower_or_petal = matches!(path, "pink_petals" | "wildflowers" | "leaf_litter")
-            || has_tag("minecraft:flowers");
-        let is_sign = path.ends_with("_sign") || has_tag("minecraft:signs");
-        let is_banner = path.ends_with("_banner") || has_tag("minecraft:banners");
-        let is_bed = path.ends_with("_bed") || has_tag("minecraft:beds");
+        let is_skull = path.ends_with("_head") || path.ends_with("_skull");
+        let is_music_disc = path.starts_with("music_disc_");
+        let is_nugget = path.ends_with("_nugget");
+        let is_flower_or_petal = matches!(
+            path,
+            "pink_petals"
+                | "wildflowers"
+                | "leaf_litter"
+                | "dandelion"
+                | "poppy"
+                | "blue_orchid"
+                | "allium"
+                | "azure_bluet"
+                | "red_tulip"
+                | "orange_tulip"
+                | "white_tulip"
+                | "pink_tulip"
+                | "oxeye_daisy"
+                | "cornflower"
+                | "lily_of_the_valley"
+                | "wither_rose"
+                | "torchflower"
+                | "closed_eyeblossom"
+                | "open_eyeblossom"
+                | "cactus_flower"
+        );
+        let is_sign = path.ends_with("_sign");
+        let is_banner = path.ends_with("_banner");
+        let is_bed = path.ends_with("_bed");
         let is_door_or_tall = path.ends_with("_door")
             || matches!(
                 path,
-                "sunflower" | "lilac" | "rose_bush" | "peony" | "tall_grass" | "large_fern" | "pitcher_plant"
+                "sunflower"
+                    | "lilac"
+                    | "rose_bush"
+                    | "peony"
+                    | "tall_grass"
+                    | "large_fern"
+                    | "pitcher_plant"
             );
         let is_compass_or_clock =
             path == "compass" || path == "recovery_compass" || path == "clock";
 
         let use_action = infer_use_action(path, is_spear, is_bundle);
 
-        // Check crossbow charged projectiles component via NBT if present
+        // Only serialize NBT when needed (crossbow charged state)
         let charged_crossbow = if path == "crossbow" {
+            let nbt_str = stack
+                .to_nbt(host)
+                .map(|c| format!("{c:?}"))
+                .unwrap_or_default();
             nbt_str.contains("charged_projectiles") && !nbt_str.contains("charged_projectiles: []")
         } else {
             false
@@ -259,7 +271,7 @@ impl ItemInfo {
             empty: false,
             block_key,
             use_action,
-            enchanted,
+            enchanted: false,
             charged_crossbow,
             is_sword,
             is_axe,
@@ -300,10 +312,8 @@ impl ItemInfo {
 
     /// Mirrors `I.shouldTranslateItem(ItemStack)`.
     pub fn should_translate_item(&self) -> bool {
-        let base = !self.is_rod
-            && !self.is_tool
-            && !self.is_mace
-            && self.use_action != UseAction::Block;
+        let base =
+            !self.is_rod && !self.is_tool && !self.is_mace && self.use_action != UseAction::Block;
         base || matches!(
             self.use_action,
             UseAction::Bow | UseAction::Drink | UseAction::Spyglass
