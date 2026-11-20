@@ -7,6 +7,9 @@ description = "Hold My Items 5.1.1 ported to Horizon v0.2 SDK (sdk-f00125f61f794
 authors = ["sapling", "Horizon Port"]
 publish = false
 
+[package.metadata.horizon]
+sdk = "f00125f61f794aaa3d4e950d301f353b35b6ee3d"
+
 [lib]
 name = "holdmyitems"
 crate-type = ["cdylib", "rlib"]
