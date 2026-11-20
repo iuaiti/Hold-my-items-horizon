@@ -38,7 +38,7 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: wasm32-unknown-unknown
-          components: clippy
+          components: clippy, rust-src
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
