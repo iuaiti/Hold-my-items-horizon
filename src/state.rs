@@ -244,6 +244,7 @@ impl AnimRegistry {
 #[derive(Debug)]
 pub struct HmiState {
     pub settings: HmiSettings,
+    pub settings_dirty: bool,
     pub delta_time: f32,
     pub tick_progress: f32,
 
@@ -285,6 +286,7 @@ impl Default for HmiState {
     fn default() -> Self {
         let mut state = Self {
             settings: HmiSettings::default(),
+            settings_dirty: true,
             delta_time: 1.0 / 60.0,
             tick_progress: 0.0,
             camera: CameraOffset::default(),
