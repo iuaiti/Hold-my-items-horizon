@@ -1,6 +1,7 @@
 # Hold My Items 5.1.1 for Horizon (Minecraft 26.3)
 
 This repository produces **two separate deliverables**:
+> **Don't use it for now, it's just a draft.**
 
 1. `holdmyitems.hmod` — a content-only Horizon mod containing files in the mod's own `holdmyitems` namespace.
 2. `holdmyitems-resourcepack.zip` — the original Minecraft resource-pack overrides, preserving the `assets/minecraft/` paths required for vanilla item models, textures, sounds, and OptiFine emissive properties.
